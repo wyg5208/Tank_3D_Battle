@@ -18,10 +18,15 @@ const ui = new UIManager(mode => {
 
 ui.showMenu();
 
-let touchControls = null;
-// 触屏控制（手机/平板）
-if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
-  touchControls = new TouchControls(game, input, ui);
+// 触屏控制：始终创建 DOM 元素，显示/隐藏由 CSS 负责
+// CSS 通过 @media (hover:none) 和 body.touch-device 双重判断
+let touchControls = new TouchControls(game, input, ui);
+
+// 标记触摸设备（用于 CSS 优先显示触屏控件）
+const isTouchDevice = ('ontouchstart' in window) ||
+                       (navigator.maxTouchPoints > 0) ||
+                       window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+if (isTouchDevice) {
   document.body.classList.add('touch-device');
 }
 

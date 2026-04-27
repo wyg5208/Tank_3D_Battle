@@ -50,11 +50,12 @@ const lbBody = document.getElementById('lb-body');
 const lbLoading = document.getElementById('lb-loading');
 const lbEmpty = document.getElementById('lb-empty');
 const lbCloseBtn = document.getElementById('lb-close-btn');
+const lbMenuBtn = document.getElementById('lb-menu-btn');
 const menuLeaderboardBtn = document.getElementById('menu-leaderboard-btn');
+const resumeBtn = document.getElementById('resume-btn');
+const quitBtn = document.getElementById('quit-btn');
 
-// 用 localStorage 记住上次名字
 const LAST_NAME_KEY = 'tank_last_name';
-let savedName = '';
 
 function getLastName() {
   try { return localStorage.getItem(LAST_NAME_KEY) || ''; } catch { return ''; }
@@ -63,18 +64,29 @@ function saveLastName(name) {
   try { localStorage.setItem(LAST_NAME_KEY, name); } catch { /* ignore */ }
 }
 
-// ---- 名字输入弹层 ----
+function getDefaultName() {
+  const existing = getLastName();
+  if (existing) return existing;
+  const adjectives = ['勇敢', '无敌', '超级', '闪电', '铁甲', '暴风', '暗影'];
+  const nouns = ['坦克手', '战士', '将军', '猎手', '骑士', '刺客', '飞龙'];
+  const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+  const noun = nouns[Math.floor(Math.random() * nouns.length)];
+  const num = Math.floor(Math.random() * 99) + 1;
+  return `${adj}${noun}${num}`;
+}
+
 function showNameOverlay(level) {
-  savedName = getLastName();
-  nameInput.value = savedName;
+  nameInput.value = getDefaultName();
   nameLevelText.textContent = level;
   nameOverlay.style.display = 'flex';
-  setTimeout(() => nameInput.focus(), 100);
+  setTimeout(() => { nameInput.focus(); nameInput.select(); }, 100);
 }
 
 function hideNameOverlay() {
   nameOverlay.style.display = 'none';
 }
+
+let afterNameSubmit = null;
 
 nameSaveBtn.addEventListener('click', () => {
   const name = nameInput.value.trim();
@@ -82,30 +94,36 @@ nameSaveBtn.addEventListener('click', () => {
   saveLastName(name);
   hideNameOverlay();
   submitScore(name, game.currentLevel);
+  afterNameSubmit = null;
 });
 
 nameSkipBtn.addEventListener('click', () => {
   hideNameOverlay();
-  // 跳过 → 回到关卡失败弹层
-});
-
-nameInput.addEventListener('keydown', e => {
-  if (e.code === 'Enter') {
-    nameSaveBtn.click();
+  if (afterNameSubmit) {
+    const cb = afterNameSubmit;
+    afterNameSubmit = null;
+    cb();
   }
 });
 
-// ---- API 调用 ----
+nameInput.addEventListener('keydown', e => {
+  if (e.code === 'Enter') nameSaveBtn.click();
+});
+
+// ---- API ----
 async function submitScore(name, level) {
-  showLeaderboard(null);
+  showLeaderboard();
   try {
-    await fetch('/api/leaderboard', {
+    const resp = await fetch('/api/leaderboard', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, level }),
     });
+    const data = await resp.json();
+    console.log('[排行榜] 提交:', name, level, data);
     loadLeaderboard();
-  } catch {
+  } catch (err) {
+    console.error('[排行榜] 保存失败:', err);
     lbLoading.style.display = 'none';
     lbEmpty.textContent = '网络错误，无法保存成绩';
     lbEmpty.style.display = 'block';
@@ -116,35 +134,31 @@ async function loadLeaderboard() {
   try {
     const resp = await fetch('/api/leaderboard');
     const data = await resp.json();
+    console.log('[排行榜] 加载:', data);
     lbLoading.style.display = 'none';
-
     if (!data.entries || data.entries.length === 0) {
       lbEmpty.style.display = 'block';
       return;
     }
-
+    lbEmpty.style.display = 'none';
     lbBody.innerHTML = '';
     data.entries.forEach((e, i) => {
       const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${i + 1}</td>
-        <td>${escapeHtml(e.name)}</td>
-        <td>${e.level}</td>
-        <td>${e.date || '--'}</td>
-      `;
+      tr.innerHTML = `<td>${i + 1}</td><td>${escapeHtml(e.name)}</td><td>${e.level}</td><td>${e.date || '--'}</td>`;
       lbBody.appendChild(tr);
     });
-  } catch {
+  } catch (err) {
+    console.error('[排行榜] 加载失败:', err);
     lbLoading.style.display = 'none';
     lbEmpty.textContent = '网络错误，无法加载排行榜';
     lbEmpty.style.display = 'block';
   }
 }
 
-function showLeaderboard(entries) {
+function showLeaderboard() {
   lbBody.innerHTML = '';
   lbEmpty.style.display = 'none';
-  lbLoading.style.display = entries ? 'none' : 'block';
+  lbLoading.style.display = 'block';
   leaderboardOverlay.style.display = 'flex';
 }
 
@@ -152,34 +166,66 @@ function hideLeaderboard() {
   leaderboardOverlay.style.display = 'none';
 }
 
-lbCloseBtn.addEventListener('click', hideLeaderboard);
+// 关闭排行榜 → 执行 afterNameSubmit 回调（如返回菜单）
+function closeLeaderboard() {
+  hideLeaderboard();
+  if (afterNameSubmit) { const cb = afterNameSubmit; afterNameSubmit = null; cb(); }
+}
 
-// 菜单"排行榜"按钮
-menuLeaderboardBtn.addEventListener('click', () => {
-  showLeaderboard(null);
-  loadLeaderboard();
-});
+lbCloseBtn.addEventListener('click', closeLeaderboard);
+lbMenuBtn.addEventListener('click', closeLeaderboard);
 
-// ESC 关闭排行榜
+// Esc 关闭排行榜
 document.addEventListener('keydown', e => {
   if (e.code === 'Escape' && leaderboardOverlay.style.display === 'flex') {
-    hideLeaderboard();
+    closeLeaderboard();
   }
 });
 
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
+menuLeaderboardBtn.addEventListener('click', () => { showLeaderboard(); loadLeaderboard(); });
+
+// ==========================================
+//  PvE 退出统一入口
+// ==========================================
+function hasPveProgress() {
+  return (game.tank1 && game.tank1.score > 0) || game.currentLevel > 1;
 }
+
+function quitPveWithName() {
+  if (game.gameMode === 'pve' && hasPveProgress()) {
+    ui.hidePause();
+    showNameOverlay(game.currentLevel);
+    afterNameSubmit = () => {
+      game.gameState = 'menu';
+      game.cleanup();
+      ui.showMenu();
+    };
+  } else {
+    game.gameState = 'menu';
+    game.cleanup();
+    ui.showMenu();
+  }
+}
+
+quitBtn.addEventListener('click', () => {
+  if (game.gameState !== 'paused') return;
+  quitPveWithName();
+});
+
+resumeBtn.addEventListener('click', () => {
+  if (game.gameState === 'paused') {
+    game.gameState = 'playing';
+    ui.hidePause();
+  }
+});
 
 // =====================================================
 //  主循环
 // =====================================================
 let levelOverlayShown = false;
 let nameOverlayShown = false;
-
 let lastTime = 0;
+
 function loop(time) {
   requestAnimationFrame(loop);
   const dt = Math.min((time - lastTime) / 1000, 0.05);
@@ -198,19 +244,16 @@ function loop(time) {
       ui.showLevelComplete(game.currentLevel);
       levelOverlayShown = true;
     } else if (game.gameState === 'levelFailed') {
-      // 先弹出名字输入
       if (!nameOverlayShown) {
         showNameOverlay(game.currentLevel);
         nameOverlayShown = true;
       }
-      // 同时显示失败弹层在背后
       ui.showLevelFailed(game.currentLevel);
       levelOverlayShown = true;
     } else if (game.gameState === 'gameover' && game.winner) {
       ui.showGameOver(game.winner.name, game.winner.color);
     }
   }
-
   game.render();
 }
 
@@ -218,17 +261,11 @@ function loop(time) {
 //  键盘事件
 // =====================================================
 window.addEventListener('keydown', e => {
-  // 名字输入弹层按键优先
   if (nameOverlay.style.display === 'flex') {
-    // Enter 提交 / Escape 跳过
-    if (e.code === 'Escape') {
-      nameSkipBtn.click();
-    }
-    // 不拦截 Tab / 其他输入键
+    if (e.code === 'Escape') nameSkipBtn.click();
     return;
   }
 
-  // --- 关卡过渡按键 ---
   if (game.gameState === 'levelComplete') {
     if (e.code === 'Enter') {
       game.nextLevel();
@@ -256,7 +293,6 @@ window.addEventListener('keydown', e => {
     return;
   }
 
-  // --- 游戏结束按键 ---
   if (game.gameState === 'gameover') {
     if (e.code === 'KeyR') {
       game.start(game.gameMode);
@@ -272,7 +308,6 @@ window.addEventListener('keydown', e => {
     return;
   }
 
-  // --- 暂停 ---
   if (e.code === 'KeyP') {
     if (game.gameState === 'playing') {
       game.gameState = 'paused';
@@ -286,9 +321,10 @@ window.addEventListener('keydown', e => {
 
   if (e.code === 'Escape') {
     if (game.gameState === 'paused') {
-      game.gameState = 'menu';
-      game.cleanup();
-      ui.showMenu();
+      quitBtn.click();
+    } else if (game.gameState === 'playing') {
+      game.gameState = 'paused';
+      quitPveWithName();
     }
     return;
   }
@@ -307,3 +343,9 @@ window.addEventListener('keydown', e => {
 });
 
 requestAnimationFrame(loop);
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}

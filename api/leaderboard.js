@@ -1,12 +1,9 @@
 import { Redis } from '@upstash/redis';
 
-const redis = Redis.fromEnv();
-
 const LEADERBOARD_KEY = 'tank_leaderboard';
 const MAX_ENTRIES = 100;
 
 export default async function handler(req, res) {
-  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -14,6 +11,11 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
+
+  const redis = new Redis({
+    url: process.env.UPSTASH_REDIS_URL,
+    token: process.env.UPSTASH_REDIS_TOKEN,
+  });
 
   // GET — 获取排行榜 Top 50
   if (req.method === 'GET') {
@@ -27,11 +29,18 @@ export default async function handler(req, res) {
       for (let i = 0; i < results.length; i += 2) {
         const raw = results[i];
         const score = results[i + 1];
-        try {
-          const data = JSON.parse(raw);
-          entries.push({ ...data, level: score });
-        } catch {
-          entries.push({ name: raw, level: score, date: '' });
+        // Upstash REST API 自动解析 JSON → raw 可能已是对象
+        if (typeof raw === 'object' && raw !== null && raw.name) {
+          entries.push({ name: raw.name, date: raw.date || '', level: score });
+        } else if (typeof raw === 'string') {
+          try {
+            const data = JSON.parse(raw);
+            entries.push({ name: data.name, date: data.date || '', level: score });
+          } catch {
+            entries.push({ name: raw, level: score, date: '' });
+          }
+        } else {
+          entries.push({ name: String(raw), level: score, date: '' });
         }
       }
 
@@ -62,7 +71,6 @@ export default async function handler(req, res) {
         member: data,
       });
 
-      // 只保留前 MAX_ENTRIES 名
       await redis.zremrangebyrank(LEADERBOARD_KEY, 0, -(MAX_ENTRIES + 1));
 
       return res.status(200).json({ ok: true });

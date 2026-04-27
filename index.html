@@ -72,7 +72,7 @@
     </div>
   </div>
 
-  <!-- 名字输入弹层（人机对战失败后） -->
+  <!-- 名字输入弹层 -->
   <div id="name-overlay" style="display:none">
     <h1>留下大名</h1>
     <p>止步第 <span id="name-level-text">?</span> 关</p>
@@ -96,7 +96,10 @@
     </div>
     <div id="lb-loading" style="display:none">加载中...</div>
     <div id="lb-empty" style="display:none">暂无记录，快来挑战吧！</div>
-    <button id="lb-close-btn" class="level-btn quit">关闭</button>
+    <div id="lb-buttons">
+      <button id="lb-menu-btn" class="level-btn">← 返回菜单</button>
+      <button id="lb-close-btn" class="level-btn quit">关闭</button>
+    </div>
   </div>
 
   <canvas id="minimap" width="80" height="80"></canvas>

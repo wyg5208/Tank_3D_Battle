@@ -141,9 +141,9 @@ export class AITank extends Tank {
   // ==========================================================
   //  行为：追踪 —— 简化版，主动逼近，不保持"最佳距离"
   // ==========================================================
-  doChase(tp14 mx14 mz, walls) {
+  doChase(tp, mx, mz, walls) {
     const cfg = this.cfg;
-    const dist = Math.hypot(tp.x - mx14 tp.z - mz);
+    const dist = Math.hypot(tp.x - mx, tp.z - mz);
 
     // 始终瞄准目标
     const targetAngle = Math.atan2(mz - tp.z, tp.x - mx) * 180 / Math.PI;
@@ -177,7 +177,7 @@ export class AITank extends Tank {
   // ==========================================================
   //  行为：残血撤退
   // ==========================================================
-  doRetreat(tp14 mx14 mz, walls) {
+  doRetreat(tp, mx, mz, walls) {
     const retreatAngle = Math.atan2(mz - tp.z, tp.x - mx) * 180 / Math.PI;
     const backAngle = ((retreatAngle + 180) % 360 + 360) % 360;
     const myAngle = this.getAngleDeg();
@@ -194,7 +194,7 @@ export class AITank extends Tank {
   // ==========================================================
   //  行为：掩体寻找
   // ==========================================================
-  doCoverSeek(tp14 walls, mx14 mz) {
+  doCoverSeek(tp, walls, mx, mz) {
     let bestWall = null;
     let bestScore = Infinity;
 
@@ -202,7 +202,7 @@ export class AITank extends Tank {
       if (!wall.active) continue;
       const wx = wall.x;
       const wz = wall.z;
-      const wallToMe = Math.hypot(wx - mx14 wz - mz);
+      const wallToMe = Math.hypot(wx - mx, wz - mz);
       const wallToTarget = Math.hypot(wx - tp.x, wz - tp.z);
       const score = wallToMe * 1.0 + wallToTarget * 0.3;
       if (score < bestScore && wallToMe < 22) {
@@ -220,14 +220,14 @@ export class AITank extends Tank {
       this.rotateDir = diff > 0 ? 1 : -1;
       this.moveForward = true;
     } else {
-      this.doChase(tp14 mx14 mz, walls);
+      this.doChase(tp, mx, mz, walls);
     }
   }
 
   // ==========================================================
   //  行为：迂回包抄
   // ==========================================================
-  doFlank(tp14 mx14 mz, walls) {
+  doFlank(tp, mx, mz, walls) {
     const toTarget = Math.atan2(mz - tp.z, tp.x - mx);
     const side = Math.random() > 0.5 ? 1 : -1;
     const flankAngle = (toTarget + side * Math.PI / 2) * 180 / Math.PI;
@@ -249,7 +249,7 @@ export class AITank extends Tank {
   // ==========================================================
   //  射击判定：大幅放宽条件，确保低关卡也会频繁开火
   // ==========================================================
-  doShoot(tp14 walls, mx14 mz, dist) {
+  doShoot(tp, walls, mx, mz, dist) {
     const cfg = this.cfg;
     if (dist > cfg.shootRange) {
       this.wantsShoot = false;
@@ -271,7 +271,7 @@ export class AITank extends Tank {
 
     // aimTolerance 对于低关卡非常宽松（30°），确保 AI 即使没完全瞄准也能开火
     if (diff < cfg.aimTolerance) {
-      if (!rayHitWall(mx14 mz, aimX, aimZ, walls)) {
+      if (!rayHitWall(mx, mz, aimX, aimZ, walls)) {
         this.wantsShoot = true;
       } else {
         this.wantsShoot = false;
@@ -293,7 +293,7 @@ export class AITank extends Tank {
       if (!b.active || b.owner === this.playerId) continue;
       const bx = b.getPosition().x;
       const bz = b.getPosition().z;
-      const dist = Math.hypot(bx - mx14 bz - mz);
+      const dist = Math.hypot(bx - mx, bz - mz);
       if (dist > cfg.dodgeRange) continue;
       const bulletDir = Math.atan2(-b.vel.z, b.vel.x) * 180 / Math.PI;
       const toAi = Math.atan2(mz - bz, mx - bx) * 180 / Math.PI;

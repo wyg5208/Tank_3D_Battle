@@ -200,15 +200,8 @@ export class UIManager {
 
   /** 绑定暂停界面按钮 */
   bindPauseButtons() {
-    this.els.resumeBtn.addEventListener('click', () => {
-      this.hidePause();
-      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyP', bubbles: true }));
-    });
-    this.els.quitBtn.addEventListener('click', () => {
-      this.hidePause();
-      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Escape', bubbles: true }));
-    });
-    // 底部暂停按钮
+    // 暂停界面的 resume / quit 按钮由 main.js 直接绑定
+    // 这里只保留底部 HUD 暂停按钮
     if (this.els.hudPauseBtn) {
       this.els.hudPauseBtn.addEventListener('click', () => {
         window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyP', bubbles: true }));

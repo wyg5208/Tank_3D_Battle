@@ -303,6 +303,12 @@ body.fpv-mode #minimap {
   display: none;
 }
 
+/* JS 检测到触摸设备时显示（主要方案，最可靠） */
+body.touch-device #touch-controls {
+  display: block;
+}
+
+/* CSS 媒体查询作为兜底方案 */
 @media (hover: none) and (pointer: coarse) {
   #touch-controls {
     display: block;

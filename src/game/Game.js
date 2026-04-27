@@ -5,6 +5,7 @@ import { Wall } from '../entities/Wall.js';
 import { Explosion } from '../entities/ParticleSystem.js';
 import { aabbIntersect } from '../utils/MathUtils.js';
 import { AudioManager } from './AudioManager.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 const WIN_SCORE = 10;
 const MAP_SIZE = 60;
@@ -13,39 +14,39 @@ const MAP_SIZE = 60;
 const THEMES = [
   {
     name: '明亮',
-    bg: 0x3a3a3a, fog: 0x3a3a3a, fogNear: 20, fogFar: 140,
-    ambient: 0xdddddd, ambientInt: 1.5,
-    hemiSky: 0x87ceeb, hemiGrnd: 0x8b6914, hemiInt: 1.0,
-    dirCol: 0xffffff, dirInt: 2.5,
-    fillCol: 0xaaaaff, fillInt: 1.2,
+    bg: 0x3a3a3a, fog: 0x3a3a3a, fogNear: 80, fogFar: 200,
+    ambient: 0xdddddd, ambientInt: 3.5,
+    hemiSky: 0x87ceeb, hemiGrnd: 0x8b6914, hemiInt: 2.5,
+    dirCol: 0xffffff, dirInt: 5.0,
+    fillCol: 0xaaaaff, fillInt: 2.5,
     ground: 0x5a5a5a
   },
   {
     name: '均衡',
-    bg: 0x2a2a2a, fog: 0x2a2a2a, fogNear: 30, fogFar: 120,
-    ambient: 0xcccccc, ambientInt: 1.2,
-    hemiSky: 0x87ceeb, hemiGrnd: 0x8b6914, hemiInt: 0.8,
-    dirCol: 0xffffff, dirInt: 2.0,
-    fillCol: 0xaaaaff, fillInt: 0.8,
+    bg: 0x2a2a2a, fog: 0x2a2a2a, fogNear: 70, fogFar: 180,
+    ambient: 0xcccccc, ambientInt: 3.0,
+    hemiSky: 0x87ceeb, hemiGrnd: 0x8b6914, hemiInt: 2.0,
+    dirCol: 0xffffff, dirInt: 4.5,
+    fillCol: 0xaaaaff, fillInt: 2.0,
     ground: 0x4a4a4a
   },
   {
     name: '黄昏',
-    bg: 0x1a1520, fog: 0x1a1520, fogNear: 25, fogFar: 100,
-    ambient: 0x665533, ambientInt: 0.8,
-    hemiSky: 0xcc8844, hemiGrnd: 0x442200, hemiInt: 0.5,
-    dirCol: 0xff9944, dirInt: 1.2,
-    fillCol: 0x664488, fillInt: 0.4,
-    ground: 0x2a2218
+    bg: 0x3a2a30, fog: 0x3a2a30, fogNear: 60, fogFar: 160,
+    ambient: 0x886644, ambientInt: 2.5,
+    hemiSky: 0xcc8844, hemiGrnd: 0x664422, hemiInt: 1.8,
+    dirCol: 0xff9944, dirInt: 3.5,
+    fillCol: 0x886688, fillInt: 1.5,
+    ground: 0x3a2a18
   },
   {
     name: '暗夜',
-    bg: 0x080810, fog: 0x080810, fogNear: 12, fogFar: 55,
-    ambient: 0x222244, ambientInt: 0.3,
-    hemiSky: 0x111133, hemiGrnd: 0x000011, hemiInt: 0.15,
-    dirCol: 0x4466aa, dirInt: 0.5,
-    fillCol: 0x222244, fillInt: 0.15,
-    ground: 0x111118
+    bg: 0x1a1a28, fog: 0x1a1a28, fogNear: 45, fogFar: 140,
+    ambient: 0x444488, ambientInt: 1.8,
+    hemiSky: 0x4444aa, hemiGrnd: 0x222244, hemiInt: 1.0,
+    dirCol: 0x6688cc, dirInt: 2.5,
+    fillCol: 0x444488, fillInt: 1.0,
+    ground: 0x1a1a22
   }
 ];
 
@@ -58,7 +59,8 @@ export class Game {
 
     // 相机
     this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200);
-    this.camera.position.set(0, 60, 50);
+    const initScale = this.getPortraitScale();
+    this.camera.position.set(0, 60 * initScale, 50 * initScale);
     this.camera.lookAt(0, 0, 0);
 
     // 渲染器
@@ -68,6 +70,18 @@ export class Game {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     container.appendChild(this.renderer.domElement);
+
+    // 轨道控制器（PC端鼠标旋转视角）
+    this.isTouchDevice = ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enableDamping = true;
+    this.controls.dampingFactor = 0.08;
+    this.controls.target.set(0, 0, 0);
+    this.controls.minDistance = 10;
+    this.controls.maxDistance = 120;
+    this.controls.maxPolarAngle = Math.PI / 2 + 0.3;
+    this.controls.enabled = true;
+    this.controls.update();
 
     // 灯光 / 地面（需要可被主题系统引用）
     this.lightRefs = {};
@@ -91,6 +105,7 @@ export class Game {
     this.winner = null;
     this.winSoundPlayed = false;
     this.cameraMode = 'default'; // 'default' | 'fpv' | 'split'
+    this.currentPreset = 2;
     this.fpvCamera = new THREE.PerspectiveCamera(70, 1, 0.1, 200);
     this.spawnPoints = [
       { x: -26, z: -26 }, { x: 26, z: 26 },
@@ -367,22 +382,23 @@ export class Game {
     const h = window.innerHeight;
 
     if (this.cameraMode === 'split' && this.gameMode === 'pvp' && this.tank1 && this.tank2 && this.tank1.alive && this.tank2.alive) {
-      // ===== 分屏模式 =====
-      const halfW = Math.floor(w / 2);
+      // ===== 分屏模式（上下分割，第一人称） =====
+      const halfH = Math.floor(h / 2);
 
-      // 左半：玩家1
-      this.renderer.setViewport(0, 0, halfW, h);
-      this.renderer.setScissor(0, 0, halfW, h);
+      // 上半：玩家1 第一人称
+      this.renderer.setViewport(0, 0, w, halfH);
+      this.renderer.setScissor(0, 0, w, halfH);
       this.renderer.setScissorTest(true);
-      this.updateFPVCamera(this.tank1, this.camera, halfW, h);
+      this.updateFPVCamera(this.tank1, this.camera, w, halfH);
       this.renderer.render(this.scene, this.camera);
 
-      // 右半：玩家2
-      this.renderer.setViewport(halfW, 0, w - halfW, h);
-      this.renderer.setScissor(halfW, 0, w - halfW, h);
+      // 下半：玩家2 第一人称（180°反转视角）
+      this.renderer.setViewport(0, halfH, w, h - halfH);
+      this.renderer.setScissor(0, halfH, w, h - halfH);
       this.renderer.setScissorTest(true);
-      this.updateFPVCamera(this.tank2, this.fpvCamera, w - halfW, h);
+      this.updateFPVCamera(this.tank2, this.fpvCamera, w, h - halfH);
       this.renderer.render(this.scene, this.fpvCamera);
+      this.drawMinimap();
 
       // 重置
       this.renderer.setViewport(0, 0, w, h);
@@ -393,10 +409,12 @@ export class Game {
       this.renderer.setScissorTest(false);
       this.updateFPVCamera(this.tank1, this.camera, w, h);
       this.renderer.render(this.scene, this.camera);
+      this.drawMinimap();
     } else {
       // ===== 默认/俯视视角 =====
       this.renderer.setViewport(0, 0, w, h);
       this.renderer.setScissorTest(false);
+      if (this.controls) this.controls.update();
       this.renderer.render(this.scene, this.camera);
     }
   }
@@ -460,6 +478,14 @@ export class Game {
     if (this.groundMat) this.groundMat.color.setHex(t.ground);
   }
 
+  /** 竖屏时自动拉远相机，确保看到完整地图 */
+  getPortraitScale() {
+    const aspect = window.innerWidth / window.innerHeight;
+    if (aspect >= 1) return 1;
+    // 竖屏比例越窄，缩放越大
+    return Math.min(2.0, Math.max(1.3, 0.85 / aspect));
+  }
+
   /** 切换相机视角 */
   setCameraPreset(preset) {
     const w = window.innerWidth;
@@ -469,26 +495,46 @@ export class Game {
 
     if (preset === 'fpv') {
       this.cameraMode = 'fpv';
+      document.body.classList.add('fpv-mode');
+      if (this.controls) this.controls.enabled = false;
       return;
     }
     if (preset === 'split') {
       this.cameraMode = this.gameMode === 'pvp' ? 'split' : 'fpv';
+      document.body.classList.add('fpv-mode');
+      if (this.controls) this.controls.enabled = false;
       return;
     }
 
     // 俯瞰预设视角
+    document.body.classList.remove('fpv-mode');
     this.cameraMode = 'default';
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
 
     const presets = {
-      1: { pos: [0, 70, 0.1], target: [0, 0, 0] },      // 1 - 俯视
-      2: { pos: [0, 60, 50], target: [0, 0, 0] },        // 2 - 默认斜角
-      3: { pos: [0, 25, 35], target: [0, 0, 0] }         // 3 - 近景
+      1: { pos: [0, 70, 0.1], target: [0, 0, 0] },
+      2: { pos: [0, 60, 50], target: [0, 0, 0] },
+      3: { pos: [0, 25, 35], target: [0, 0, 0] }
     };
     const p = presets[preset] || presets[2];
-    this.camera.position.set(...p.pos);
-    this.camera.lookAt(...p.target);
+    this.currentPreset = preset;
+
+    // 竖屏时拉远相机以显示更宽的地图范围
+    const scale = this.getPortraitScale();
+    let camX, camY, camZ;
+    if (scale > 1) {
+      camX = 0; camY = p.pos[1] * scale; camZ = p.pos[2] * scale;
+    } else {
+      [camX, camY, camZ] = p.pos;
+    }
+    this.camera.position.set(camX, camY, camZ);
+    // 同步 OrbitControls
+    if (this.controls) {
+      this.controls.target.set(...p.target);
+      this.controls.enabled = true;
+      this.controls.update();
+    }
   }
 
   onResize() {
@@ -499,5 +545,79 @@ export class Game {
     this.fpvCamera.aspect = w / h;
     this.fpvCamera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
+
+    // 横竖屏切换时重新应用当前预设以适配缩放
+    if (this.cameraMode === 'default' && this.currentPreset) {
+      this.setCameraPreset(this.currentPreset);
+    }
   }
+
+  /** 绘制微缩地图（第一人称视角） */
+  drawMinimap() {
+    const canvas = document.getElementById('minimap');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const size = 80;
+    const halfMap = 30;
+    const scale = size / (halfMap * 2);
+
+    const toCanvas = (wx, wz) => ({
+      x: size - (wx + halfMap) * scale,
+      y: size - (wz + halfMap) * scale
+    });
+
+    ctx.clearRect(0, 0, size, size);
+
+    // 背景（80%透明）
+    ctx.fillStyle = 'rgba(10, 10, 20, 0.2)';
+    ctx.fillRect(0, 0, size, size);
+
+    // 地图边界
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(1, 1, size - 2, size - 2);
+
+    // 网格线（去掉，小尺寸下太密）
+    // 墙壁
+    ctx.fillStyle = 'rgba(200, 200, 200, 0.12)';
+    for (const wall of this.walls) {
+      if (!wall.active) continue;
+      const p = toCanvas(wall.x, wall.z);
+      ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
+    }
+
+    // 绘制坦克标记
+    const drawTank = (tank, color) => {
+      if (!tank || !tank.alive) return;
+      const p = toCanvas(tank.getPosition().x, tank.getPosition().z);
+      const angle = tank.getRotation();
+
+      // 方向线
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.2;
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x - Math.sin(angle) * 5, p.y - Math.cos(angle) * 5);
+      ctx.stroke();
+
+      // 圆点
+      ctx.globalAlpha = 0.7;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 白边
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.5;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    };
+
+    if (this.tank1) drawTank(this.tank1, '#22c55e');
+    if (this.tank2) drawTank(this.tank2, this.gameMode === 'pve' ? '#3b82f6' : '#dc2626');
+  }
+
 }

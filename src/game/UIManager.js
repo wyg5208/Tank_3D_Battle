@@ -9,6 +9,10 @@ export class UIManager {
       menu: document.getElementById('menu-screen'),
       hud: document.getElementById('hud'),
       gameover: document.getElementById('gameover-screen'),
+      pause: document.getElementById('pause-screen'),
+      resumeBtn: document.getElementById('resume-btn'),
+      quitBtn: document.getElementById('quit-btn'),
+      hudPauseBtn: document.getElementById('hud-pause-btn'),
       winnerText: document.getElementById('winner-text'),
       respawnText: document.getElementById('respawn-text'),
       p1Score: document.getElementById('p1-score'),
@@ -23,6 +27,8 @@ export class UIManager {
 
     this.menuBtns = document.querySelectorAll('.mode-btn');
     this.bindMenuKeys();
+    this.bindMenuClicks();
+    this.bindPauseButtons();
   }
 
   bindMenuKeys() {
@@ -35,10 +41,32 @@ export class UIManager {
         this.selectedIndex = Math.min(this.modes.length - 1, this.selectedIndex + 1);
         this.updateMenuSelection();
       } else if (e.code === 'Enter') {
-        this.els.menu.style.display = 'none';
-        this.onModeSelect(this.modes[this.selectedIndex]);
+        this.startGame();
       }
     });
+  }
+
+  /** 菜单按钮触控/点击支持 */
+  bindMenuClicks() {
+    this.menuBtns.forEach((btn, i) => {
+      btn.addEventListener('click', () => {
+        this.selectedIndex = i;
+        this.startGame();
+      });
+      // 移动端 touch 事件
+      btn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        this.selectedIndex = i;
+        this.startGame();
+      });
+    });
+  }
+
+  /** 启动游戏 */
+  startGame() {
+    this.updateMenuSelection();
+    this.els.menu.style.display = 'none';
+    this.onModeSelect(this.modes[this.selectedIndex]);
   }
 
   updateMenuSelection() {
@@ -51,20 +79,22 @@ export class UIManager {
     this.els.menu.style.display = 'flex';
     this.els.hud.style.display = 'none';
     this.els.gameover.style.display = 'none';
+    this.els.pause.style.display = 'none';
   }
 
   showHUD(mode) {
     this.els.menu.style.display = 'none';
     this.els.hud.style.display = 'block';
     this.els.gameover.style.display = 'none';
+    this.els.pause.style.display = 'none';
 
     if (mode === 'pve') {
-      this.els.p2Name.textContent = '电脑';
+      this.els.p2Name.textContent = '人机对战';
       this.els.p2Name.style.color = '#3b82f6';
       this.els.helpP1.textContent = '玩家1: WASD/方向键移动 | 空格射击';
       this.els.helpP2.textContent = '对手: AI电脑';
     } else {
-      this.els.p2Name.textContent = '玩家2';
+      this.els.p2Name.textContent = '双人对战';
       this.els.p2Name.style.color = '#dc2626';
       this.els.helpP1.textContent = '玩家1: WASD移动 | 空格射击';
       this.els.helpP2.textContent = '玩家2: 方向键移动 | 回车射击';
@@ -105,11 +135,38 @@ export class UIManager {
 
   showGameOver(winnerName, winnerColor) {
     this.els.gameover.style.display = 'flex';
+    this.els.pause.style.display = 'none';
     this.els.winnerText.textContent = `${winnerName} 获胜!`;
     this.els.winnerText.style.color = winnerColor;
   }
 
+  showPause() {
+    this.els.pause.style.display = 'flex';
+  }
+
+  hidePause() {
+    this.els.pause.style.display = 'none';
+  }
+
   updateTheme(name) {
     if (this.els.themeIndicator) this.els.themeIndicator.textContent = name;
+  }
+
+  /** 绑定暂停界面按钮 */
+  bindPauseButtons() {
+    this.els.resumeBtn.addEventListener('click', () => {
+      this.hidePause();
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyP', bubbles: true }));
+    });
+    this.els.quitBtn.addEventListener('click', () => {
+      this.hidePause();
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Escape', bubbles: true }));
+    });
+    // 底部暂停按钮
+    if (this.els.hudPauseBtn) {
+      this.els.hudPauseBtn.addEventListener('click', () => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyP', bubbles: true }));
+      });
+    }
   }
 }

@@ -13,13 +13,16 @@ const ui = new UIManager(mode => {
   input.setMode(mode);
   ui.showHUD(mode);
   ui.updateTheme(game.sceneThemeName);
+  if (touchControls) touchControls.updateForMode();
 });
 
 ui.showMenu();
 
+let touchControls = null;
 // 触屏控制（手机/平板）
 if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
-  new TouchControls(game, input, ui);
+  touchControls = new TouchControls(game, input, ui);
+  document.body.classList.add('touch-device');
 }
 
 // 游戏主循环
@@ -41,20 +44,48 @@ function loop(time) {
   game.render();
 }
 
-// 键盘控制：重新开始 / 退出 / 视角切换
+// 键盘控制：重新开始 / 退出 / 暂停 / 视角切换
 window.addEventListener('keydown', e => {
+  // 游戏结束按键
   if (game.gameState === 'gameover') {
     if (e.code === 'KeyR') {
       game.start(game.gameMode);
       input.setMode(game.gameMode);
       ui.showHUD(game.gameMode);
       ui.updateTheme(game.sceneThemeName);
+      if (touchControls) touchControls.updateForMode();
     } else if (e.code === 'Escape') {
       game.gameState = 'menu';
       game.cleanup();
       ui.showMenu();
     }
+    return;
   }
+
+  // 暂停/继续（P键）
+  if (e.code === 'KeyP') {
+    if (game.gameState === 'playing') {
+      game.gameState = 'paused';
+      ui.showPause();
+    } else if (game.gameState === 'paused') {
+      game.gameState = 'playing';
+      ui.hidePause();
+    }
+    return;
+  }
+
+  // 退出到菜单（Escape - 暂停或游戏结束状态）
+  if (e.code === 'Escape') {
+    if (game.gameState === 'paused') {
+      game.gameState = 'menu';
+      game.cleanup();
+      ui.showMenu();
+    }
+    return;
+  }
+
+  // 以下按键仅在 playing 时生效
+  if (game.gameState !== 'playing') return;
 
   // 视角切换
   if (e.code === 'Digit1') game.setCameraPreset(1);

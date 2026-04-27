@@ -1,33 +1,59 @@
-// 触屏控制
+// 触屏控制（支持 PvE 单人 / PvP 双人）
 export class TouchControls {
   constructor(game, input, ui) {
     this.game = game;
     this.input = input;
     this.ui = ui;
-    this.joystickCenter = { x: 0, y: 0 };
-    this.activeJoystick = null;
+
+    // P1 摇杆状态
+    this.p1JoystickCenter = { x: 0, y: 0 };
+    this.p1ActiveId = null;
+
+    // P2 摇杆状态
+    this.p2JoystickCenter = { x: 0, y: 0 };
+    this.p2ActiveId = null;
+
     this.createUI();
+    this.updateForMode();
+  }
+
+  /** 根据当前游戏模式调整 UI */
+  updateForMode() {
+    const isPvP = this.game.gameMode === 'pvp';
+    const p2Controls = document.getElementById('touch-p2');
+    const toolbar = document.getElementById('touch-toolbar');
+    if (p2Controls) p2Controls.style.display = isPvP ? 'block' : 'none';
+    if (toolbar) toolbar.classList.toggle('pvp', isPvP);
   }
 
   createUI() {
     const container = document.createElement('div');
     container.id = 'touch-controls';
 
-    // 左侧摇杆区
-    const jArea = document.createElement('div');
-    jArea.id = 'joystick-area';
-    const jKnob = document.createElement('div');
-    jKnob.id = 'joystick-knob';
-    jArea.appendChild(jKnob);
-    container.appendChild(jArea);
+    // ===== P1 摇杆 (左下) =====
+    const p1Div = document.createElement('div');
+    p1Div.id = 'touch-p1';
+    const p1Joy = this.makeJoystick('p1-joystick-area', 'p1-joystick-knob');
+    const p1Fire = this.makeFireBtn('p1-fire-btn');
+    p1Div.appendChild(p1Joy.area);
+    p1Div.appendChild(p1Fire);
+    container.appendChild(p1Div);
+    this.p1JoyArea = p1Joy.area;
+    this.p1JoyKnob = p1Joy.knob;
 
-    // 右侧射击按钮
-    const fire = document.createElement('div');
-    fire.id = 'fire-btn';
-    fire.innerHTML = '<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" fill="none" stroke="#fff" stroke-width="3"/><circle cx="24" cy="24" r="12" fill="#ff4444" opacity="0.85"/></svg>';
-    container.appendChild(fire);
+    // ===== P2 摇杆 (右上，仅 PvP 显示) =====
+    const p2Div = document.createElement('div');
+    p2Div.id = 'touch-p2';
+    p2Div.style.display = 'none';
+    const p2Joy = this.makeJoystick('p2-joystick-area', 'p2-joystick-knob');
+    const p2Fire = this.makeFireBtn('p2-fire-btn');
+    p2Div.appendChild(p2Joy.area);
+    p2Div.appendChild(p2Fire);
+    container.appendChild(p2Div);
+    this.p2JoyArea = p2Joy.area;
+    this.p2JoyKnob = p2Joy.knob;
 
-    // 底部工具栏（视角/主题切换）
+    // ===== 工具栏（视角/主题切换） =====
     const toolbar = document.createElement('div');
     toolbar.id = 'touch-toolbar';
     const btns = [
@@ -36,7 +62,8 @@ export class TouchControls {
       { code: 'Digit3', label: '3' },
       { code: 'Digit4', label: '4' },
       { code: 'Digit5', label: '5' },
-      { code: 'KeyC', label: 'C' }
+      { code: 'KeyC', label: 'C' },
+      { code: 'KeyP', label: '⏸' }
     ];
     for (const b of btns) {
       const el = document.createElement('button');
@@ -46,28 +73,77 @@ export class TouchControls {
       toolbar.appendChild(el);
     }
     container.appendChild(toolbar);
+    this.toolbar = toolbar;
 
     document.body.appendChild(container);
-    this.joystickArea = jArea;
-    this.joystickKnob = jKnob;
-    this.toolbar = toolbar;
     this.bindEvents();
   }
 
+  makeJoystick(areaId, knobId) {
+    const area = document.createElement('div');
+    area.className = 'touch-joystick-area';
+    area.id = areaId;
+    const knob = document.createElement('div');
+    knob.className = 'touch-joystick-knob';
+    knob.id = knobId;
+    area.appendChild(knob);
+    return { area, knob };
+  }
+
+  makeFireBtn(id) {
+    const btn = document.createElement('div');
+    btn.className = 'touch-fire-btn';
+    btn.id = id;
+    btn.innerHTML = '<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" fill="none" stroke="#fff" stroke-width="3"/><circle cx="24" cy="24" r="12" fill="#ff4444" opacity="0.85"/></svg>';
+    return btn;
+  }
+
   bindEvents() {
-    this.bindJoystick();
-    this.bindFire();
+    // P1 摇杆 → WASD
+    this.bindJoystick(this.p1JoyArea, this.p1JoyKnob,
+      (id) => { this.p1ActiveId = id; },
+      (id) => { return this.p1ActiveId === id ? { x: this.p1JoystickCenter.x, y: this.p1JoystickCenter.y } : null; },
+      (cx, cy) => {
+        const c = this.p1JoystickCenter;
+        this.updateJoystickKnob(this.p1JoyKnob, cx, cy, c.x, c.y);
+        this.mapKeys(cx, cy, c.x, c.y, 'KeyW', 'KeyS', 'KeyA', 'KeyD');
+      },
+      () => {
+        this.p1JoyKnob.style.transform = 'translate(-50%, -50%)';
+        this.input.keys['KeyW'] = false; this.input.keys['KeyS'] = false;
+        this.input.keys['KeyA'] = false; this.input.keys['KeyD'] = false;
+      }
+    );
+
+    // P2 摇杆 → 方向键
+    this.bindJoystick(this.p2JoyArea, this.p2JoyKnob,
+      (id) => { this.p2ActiveId = id; },
+      (id) => { return this.p2ActiveId === id ? { x: this.p2JoystickCenter.x, y: this.p2JoystickCenter.y } : null; },
+      (cx, cy) => {
+        const c = this.p2JoystickCenter;
+        this.updateJoystickKnob(this.p2JoyKnob, cx, cy, c.x, c.y);
+        this.mapKeys(cx, cy, c.x, c.y, 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight');
+      },
+      () => {
+        this.p2JoyKnob.style.transform = 'translate(-50%, -50%)';
+        this.input.keys['ArrowUp'] = false; this.input.keys['ArrowDown'] = false;
+        this.input.keys['ArrowLeft'] = false; this.input.keys['ArrowRight'] = false;
+      }
+    );
+
+    // P1 射击 → Space
+    this.bindFireBtn('p1-fire-btn', 'Space');
+    // P2 射击 → Enter
+    this.bindFireBtn('p2-fire-btn', 'Enter');
+
+    // 工具栏
     this.bindToolbar();
   }
 
-  // ===== 虚拟摇杆 =====
-  bindJoystick() {
-    const area = this.joystickArea;
-    const knob = this.joystickKnob;
-
-    const getTouch = (e) => {
+  bindJoystick(area, knob, onStart, getCenter, onMove, onReset) {
+    const getTouch = (e, activeId) => {
       for (const t of e.changedTouches) {
-        if (t.identifier === this.activeJoystick) return t;
+        if (t.identifier === activeId) return t;
       }
       return null;
     };
@@ -75,84 +151,72 @@ export class TouchControls {
     area.addEventListener('touchstart', (e) => {
       e.preventDefault();
       const t = e.changedTouches[0];
-      this.activeJoystick = t.identifier;
+      onStart(t.identifier);
       const rect = area.getBoundingClientRect();
-      this.joystickCenter = {
-        x: rect.left + rect.width / 2,
-        y: rect.top + rect.height / 2
-      };
-      this.updateJoystick(t.clientX, t.clientY);
+      // Store center in p1/p2JoystickCenter based on area
+      if (area === this.p1JoyArea) {
+        this.p1JoystickCenter = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      } else {
+        this.p2JoystickCenter = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      }
+      onMove(t.clientX, t.clientY);
     }, { passive: false });
 
     area.addEventListener('touchmove', (e) => {
       e.preventDefault();
-      const t = getTouch(e);
-      if (t) this.updateJoystick(t.clientX, t.clientY);
+      const activeId = area === this.p1JoyArea ? this.p1ActiveId : this.p2ActiveId;
+      const t = getTouch(e, activeId);
+      if (t) onMove(t.clientX, t.clientY);
     }, { passive: false });
 
-    const reset = (e) => {
+    area.addEventListener('touchend', (e) => {
+      const activeId = area === this.p1JoyArea ? this.p1ActiveId : this.p2ActiveId;
       for (const t of e.changedTouches) {
-        if (t.identifier === this.activeJoystick) {
-          this.activeJoystick = null;
-          this.resetJoystick();
-        }
+        if (t.identifier === activeId) { onReset(); break; }
       }
-    };
-    area.addEventListener('touchend', reset);
-    area.addEventListener('touchcancel', reset);
+    });
+    area.addEventListener('touchcancel', () => onReset());
   }
 
-  updateJoystick(cx, cy) {
-    const dx = cx - this.joystickCenter.x;
-    const dy = cy - this.joystickCenter.y;
+  updateJoystickKnob(knob, cx, cy, centerX, centerY) {
+    const dx = cx - centerX;
+    const dy = cy - centerY;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    const maxDist = 50;
+    const maxDist = 45;
     const clamped = Math.min(dist, maxDist);
     const angle = Math.atan2(dy, dx);
-
-    // 更新摇杆圆钮位置
     const kx = Math.cos(angle) * clamped;
     const ky = Math.sin(angle) * clamped;
-    this.joystickKnob.style.transform = `translate(calc(-50% + ${kx}px), calc(-50% + ${ky}px))`;
+    knob.style.transform = `translate(calc(-50% + ${kx}px), calc(-50% + ${ky}px))`;
+  }
 
-    // 映射到 WASD 按键
+  mapKeys(cx, cy, centerX, centerY, upKey, downKey, leftKey, rightKey) {
+    const dx = cx - centerX;
+    const dy = cy - centerY;
     const threshold = 15;
-    this.input.keys['KeyW'] = dy < -threshold;
-    this.input.keys['KeyS'] = dy > threshold;
-    this.input.keys['KeyA'] = dx < -threshold;
-    this.input.keys['KeyD'] = dx > threshold;
+    this.input.keys[upKey] = dy < -threshold;
+    this.input.keys[downKey] = dy > threshold;
+    this.input.keys[leftKey] = dx < -threshold;
+    this.input.keys[rightKey] = dx > threshold;
   }
 
-  resetJoystick() {
-    this.joystickKnob.style.transform = 'translate(-50%, -50%)';
-    this.input.keys['KeyW'] = false;
-    this.input.keys['KeyS'] = false;
-    this.input.keys['KeyA'] = false;
-    this.input.keys['KeyD'] = false;
-  }
-
-  // ===== 射击按钮 =====
-  bindFire() {
-    const btn = document.getElementById('fire-btn');
+  bindFireBtn(id, key) {
+    const btn = document.getElementById(id);
     if (!btn) return;
-
     btn.addEventListener('touchstart', (e) => {
       e.preventDefault();
-      this.input.keys['Space'] = true;
-      this.input.justPressed['Space'] = true;
+      this.input.keys[key] = true;
+      this.input.justPressed[key] = true;
     }, { passive: false });
-
     btn.addEventListener('touchend', (e) => {
       e.preventDefault();
-      this.input.keys['Space'] = false;
+      this.input.keys[key] = false;
     }, { passive: false });
-
     btn.addEventListener('touchcancel', () => {
-      this.input.keys['Space'] = false;
+      this.input.keys[key] = false;
     });
   }
 
-  // ===== 工具栏按钮（视角/主题） =====
   bindToolbar() {
     const btns = this.toolbar.querySelectorAll('.touch-tool-btn');
     for (const btn of btns) {

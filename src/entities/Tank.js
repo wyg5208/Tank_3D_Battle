@@ -4,7 +4,7 @@ import { Bullet } from './Bullet.js';
 
 const TANK_SIZE = 1.6;
 const TANK_SPEED = 8;
-const ROT_SPEED = 120;
+const ROT_SPEED = 60;
 const SHOOT_COOLDOWN = 0.3;
 const MAX_HP = 100;
 

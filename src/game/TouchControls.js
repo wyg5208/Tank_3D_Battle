@@ -24,6 +24,28 @@ export class TouchControls {
     const toolbar = document.getElementById('touch-toolbar');
     if (p2Controls) p2Controls.style.display = isPvP ? 'block' : 'none';
     if (toolbar) toolbar.classList.toggle('pvp', isPvP);
+    // 同步当前视角布局
+    this.updateForCameraMode(this.game.cameraMode);
+  }
+
+  /** 根据视角模式调整触屏布局
+   *  1/2/3/5号视角：P2 摇杆和射击按钮翻转180°（摇杆右上、射击左上）
+   *  4号视角(FPV)：隐藏 P2 控件，只保留 P1
+   */
+  updateForCameraMode(cameraMode) {
+    const p2Controls = document.getElementById('touch-p2');
+    if (!p2Controls) return;
+
+    // FPV 模式：隐藏 P2 控件
+    if (cameraMode === 'fpv') {
+      p2Controls.classList.remove('p2-flipped');
+      p2Controls.classList.add('p2-hidden');
+      return;
+    }
+
+    // 非FPV 模式：显示 P2 并翻转180°
+    p2Controls.classList.remove('p2-hidden');
+    p2Controls.classList.add('p2-flipped');
   }
 
   createUI() {

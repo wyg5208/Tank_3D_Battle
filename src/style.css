@@ -385,6 +385,22 @@ body.touch-device #touch-controls {
   right: 24px;
 }
 
+/* ===== P2 控件翻转180°（1/2/3/5号视角） ===== */
+/* 摇杆从左上 → 右上，射击从右上 → 左上 */
+#touch-p2.p2-flipped #p2-joystick-area {
+  left: auto;
+  right: 16px;
+}
+#touch-p2.p2-flipped #p2-fire-btn {
+  right: auto;
+  left: 24px;
+}
+
+/* ===== FPV 模式隐藏 P2 控件（4号视角） ===== */
+#touch-p2.p2-hidden {
+  display: none !important;
+}
+
 /* ===== 底部工具栏 ===== */
 #touch-toolbar {
   position: fixed;

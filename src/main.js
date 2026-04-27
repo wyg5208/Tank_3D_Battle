@@ -98,6 +98,10 @@ window.addEventListener('keydown', e => {
   else if (e.code === 'Digit3') game.setCameraPreset(3);
   else if (e.code === 'Digit4') game.setCameraPreset('fpv');
   else if (e.code === 'Digit5') game.setCameraPreset('split');
+  // 视角切换后同步触屏布局
+  if (['Digit1','Digit2','Digit3','Digit4','Digit5'].includes(e.code)) {
+    touchControls.updateForCameraMode(game.cameraMode);
+  }
   // 场景主题切换
   else if (e.code === 'KeyC') {
     const name = game.cycleTheme();

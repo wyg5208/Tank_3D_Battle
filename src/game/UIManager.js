@@ -22,7 +22,12 @@ export class UIManager {
       p2Name: document.getElementById('p2-name'),
       helpP1: document.getElementById('help-p1'),
       helpP2: document.getElementById('help-p2'),
-      themeIndicator: document.getElementById('theme-indicator')
+      themeIndicator: document.getElementById('theme-indicator'),
+      // 关卡系统
+      levelBadge: document.getElementById('level-badge'),
+      levelOverlay: document.getElementById('level-overlay'),
+      levelResultText: document.getElementById('level-result-text'),
+      levelHintText: document.getElementById('level-hint-text')
     };
 
     this.menuBtns = document.querySelectorAll('.mode-btn');
@@ -80,6 +85,7 @@ export class UIManager {
     this.els.hud.style.display = 'none';
     this.els.gameover.style.display = 'none';
     this.els.pause.style.display = 'none';
+    this.hideLevelOverlay();
   }
 
   showHUD(mode) {
@@ -87,18 +93,29 @@ export class UIManager {
     this.els.hud.style.display = 'block';
     this.els.gameover.style.display = 'none';
     this.els.pause.style.display = 'none';
+    this.hideLevelOverlay();
 
     if (mode === 'pve') {
       this.els.p2Name.textContent = '人机对战';
       this.els.p2Name.style.color = '#3b82f6';
       this.els.helpP1.textContent = '玩家1: WASD/方向键移动 | 空格射击';
       this.els.helpP2.textContent = '对手: AI电脑';
+      this.els.levelBadge.style.display = 'block';
+      this.els.levelBadge.textContent = '第 1 关';
     } else {
       this.els.p2Name.textContent = '双人对战';
       this.els.p2Name.style.color = '#dc2626';
       this.els.helpP1.textContent = '玩家1: WASD移动 | 空格射击';
       this.els.helpP2.textContent = '玩家2: 方向键移动 | 回车射击';
+      this.els.levelBadge.style.display = 'none';
     }
+  }
+
+  /** 更新关卡徽章 */
+  updateLevelBadge(level, killsNeeded) {
+    if (!this.els.levelBadge || this.els.levelBadge.style.display === 'none') return;
+    this.els.levelBadge.textContent = `第 ${level} 关`;
+    // 击杀进度提示放在 score 旁边
   }
 
   updateHUD(tank1, tank2) {
@@ -150,6 +167,35 @@ export class UIManager {
 
   updateTheme(name) {
     if (this.els.themeIndicator) this.els.themeIndicator.textContent = name;
+  }
+
+  // ============================================================
+  //  关卡过渡界面
+  // ============================================================
+
+  /** 关卡完成 */
+  showLevelComplete(level) {
+    const overlay = this.els.levelOverlay;
+    overlay.style.display = 'flex';
+    overlay.className = 'success';
+    this.els.levelResultText.textContent = `第 ${level} 关 完成！`;
+    this.els.levelHintText.textContent = '按 Enter 进入下一关';
+  }
+
+  /** 关卡失败 */
+  showLevelFailed(level) {
+    const overlay = this.els.levelOverlay;
+    overlay.style.display = 'flex';
+    overlay.className = 'failed';
+    this.els.levelResultText.textContent = `第 ${level} 关 失败`;
+    this.els.levelHintText.textContent = '按 R 重试本关  |  ESC 返回菜单';
+  }
+
+  /** 隐藏关卡过渡 */
+  hideLevelOverlay() {
+    const overlay = this.els.levelOverlay;
+    overlay.style.display = 'none';
+    overlay.className = '';
   }
 
   /** 绑定暂停界面按钮 */

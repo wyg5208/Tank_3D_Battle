@@ -18,6 +18,7 @@
       <button class="mode-btn selected">双人对战 (PvP)</button>
       <button class="mode-btn">人机对战 (PvE)</button>
     </div>
+    <button id="menu-leaderboard-btn" class="menu-leaderboard-btn">🏆 排行榜</button>
     <p class="menu-hint">↑↓ 选择 &nbsp; Enter 确认</p>
   </div>
 
@@ -35,6 +36,7 @@
     </div>
     <div id="hud-center">
       <span id="p2-name">玩家2</span>
+      <span id="level-badge" style="display:none">第 1 关</span>
       <span id="respawn-text"></span>
     </div>
     <div id="hud-bottom">
@@ -57,6 +59,44 @@
       <button id="resume-btn" class="pause-btn">▶ 继续游戏</button>
       <button id="quit-btn" class="pause-btn quit">✕ 退出菜单</button>
     </div>
+  </div>
+
+  <!-- 关卡过渡 -->
+  <div id="level-overlay" style="display:none">
+    <h1 id="level-result-text"></h1>
+    <p id="level-hint-text"></p>
+    <div id="level-buttons">
+      <button id="level-next-btn" class="level-btn">进入下一关</button>
+      <button id="level-retry-btn" class="level-btn">重试本关</button>
+      <button id="level-quit-btn" class="level-btn quit">返回菜单</button>
+    </div>
+  </div>
+
+  <!-- 名字输入弹层（人机对战失败后） -->
+  <div id="name-overlay" style="display:none">
+    <h1>留下大名</h1>
+    <p>止步第 <span id="name-level-text">?</span> 关</p>
+    <div id="name-input-row">
+      <input id="name-input" type="text" maxlength="16" placeholder="输入你的名字" autocomplete="off" />
+      <button id="name-save-btn" class="level-btn">保存成绩</button>
+    </div>
+    <button id="name-skip-btn" class="level-btn quit">跳过</button>
+  </div>
+
+  <!-- 排行榜弹层 -->
+  <div id="leaderboard-overlay" style="display:none">
+    <h1 class="lb-title">🏆 排行榜</h1>
+    <div id="lb-table-wrap">
+      <table id="lb-table">
+        <thead>
+          <tr><th>排名</th><th>名字</th><th>最高关卡</th><th>日期</th></tr>
+        </thead>
+        <tbody id="lb-body"></tbody>
+      </table>
+    </div>
+    <div id="lb-loading" style="display:none">加载中...</div>
+    <div id="lb-empty" style="display:none">暂无记录，快来挑战吧！</div>
+    <button id="lb-close-btn" class="level-btn quit">关闭</button>
   </div>
 
   <canvas id="minimap" width="80" height="80"></canvas>

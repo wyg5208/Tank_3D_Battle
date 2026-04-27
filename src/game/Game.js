@@ -96,7 +96,7 @@ export class Game {
 
     // 状态
     this.gameMode = 'pvp';
-    this.gameState = 'menu'; // menu, playing, gameover
+    this.gameState = 'menu'; // menu, playing, gameover, levelComplete, levelFailed
     this.tank1 = null;
     this.tank2 = null;
     this.walls = [];
@@ -106,6 +106,9 @@ export class Game {
     this.winSoundPlayed = false;
     this.cameraMode = 'default'; // 'default' | 'fpv' | 'split'
     this.currentPreset = 2;
+    // 关卡系统
+    this.currentLevel = 1;
+    this.aiList = []; // PvE 下所有 AI 坦克（含 tank2）
     this.fpvCamera = new THREE.PerspectiveCamera(70, 1, 0.1, 200);
     this.spawnPoints = [
       { x: -26, z: -26 }, { x: 26, z: 26 },
@@ -167,11 +170,15 @@ export class Game {
     this.scene.add(grid);
   }
 
+  // ================================================================
+  //  地图生成
+  // ================================================================
+
+  /** PvP 模式固定地图 */
   createMap() {
     this.walls.forEach(w => w.destroy());
     this.walls = [];
 
-    // 边界钢墙
     const wallSize = 4;
     const halfMap = MAP_SIZE / 2;
     for (let x = -halfMap; x <= halfMap; x += wallSize) {
@@ -183,19 +190,16 @@ export class Game {
       this.walls.push(new Wall(this.scene, halfMap, z, 'steel'));
     }
 
-    // 随机砖块
     const margin = 12;
     for (let i = 0; i < 30; i++) {
       const x = Math.floor((Math.random() * (MAP_SIZE - margin * 2) - (MAP_SIZE / 2 - margin)) / wallSize) * wallSize;
       const z = Math.floor((Math.random() * (MAP_SIZE - margin * 2) - (MAP_SIZE / 2 - margin)) / wallSize) * wallSize;
-      // 避开出生点
       const nearSpawn = this.spawnPoints.some(p => Math.abs(p.x - x) < 10 && Math.abs(p.z - z) < 10);
       if (!nearSpawn) {
         this.walls.push(new Wall(this.scene, x, z, 'brick'));
       }
     }
 
-    // 中央掩体
     for (let dx = -wallSize; dx <= wallSize; dx += wallSize) {
       for (let dz = -wallSize; dz <= wallSize; dz += wallSize) {
         if (dx === 0 && dz === 0) continue;
@@ -203,6 +207,142 @@ export class Game {
       }
     }
   }
+
+  /** PvE 关卡地图：难度随等级提升 */
+  createLevelMap(level) {
+    this.walls.forEach(w => w.destroy());
+    this.walls = [];
+
+    const wallSize = 4;
+    const halfMap = MAP_SIZE / 2;
+
+    // 边界钢墙
+    for (let x = -halfMap; x <= halfMap; x += wallSize) {
+      this.walls.push(new Wall(this.scene, x, -halfMap, 'steel'));
+      this.walls.push(new Wall(this.scene, x, halfMap, 'steel'));
+    }
+    for (let z = -halfMap + wallSize; z < halfMap; z += wallSize) {
+      this.walls.push(new Wall(this.scene, -halfMap, z, 'steel'));
+      this.walls.push(new Wall(this.scene, halfMap, z, 'steel'));
+    }
+
+    // 砖块数量随等级增加
+    let brickCount, steelCount, margin;
+    if (level <= 3) {
+      brickCount = 10; steelCount = 0; margin = 16;
+    } else if (level <= 7) {
+      brickCount = 25; steelCount = 0; margin = 12;
+    } else if (level <= 12) {
+      brickCount = 40; steelCount = 3; margin = 10;
+    } else {
+      brickCount = Math.min(58, 40 + (level - 13) * 1.2);
+      steelCount = Math.min(14, 3 + (level - 13) * 0.6);
+      margin = 8;
+    }
+
+    // 随机砖块
+    for (let i = 0; i < brickCount; i++) {
+      const x = Math.floor((Math.random() * (MAP_SIZE - margin * 2) - (MAP_SIZE / 2 - margin)) / wallSize) * wallSize;
+      const z = Math.floor((Math.random() * (MAP_SIZE - margin * 2) - (MAP_SIZE / 2 - margin)) / wallSize) * wallSize;
+      const nearSpawn = this.spawnPoints.some(p => Math.abs(p.x - x) < 10 && Math.abs(p.z - z) < 10);
+      if (!nearSpawn) {
+        this.walls.push(new Wall(this.scene, x, z, 'brick'));
+      }
+    }
+
+    // 随机钢墙（高难度）
+    for (let i = 0; i < steelCount; i++) {
+      const x = Math.floor((Math.random() * (MAP_SIZE - margin * 2) - (MAP_SIZE / 2 - margin)) / wallSize) * wallSize;
+      const z = Math.floor((Math.random() * (MAP_SIZE - margin * 2) - (MAP_SIZE / 2 - margin)) / wallSize) * wallSize;
+      const nearSpawn = this.spawnPoints.some(p => Math.abs(p.x - x) < 6 && Math.abs(p.z - z) < 6);
+      if (!nearSpawn) {
+        this.walls.push(new Wall(this.scene, x, z, 'steel'));
+      }
+    }
+
+    // 中央掩体（低等级保留，高等级缩小以增加难度）
+    if (level <= 8) {
+      for (let dx = -wallSize; dx <= wallSize; dx += wallSize) {
+        for (let dz = -wallSize; dz <= wallSize; dz += wallSize) {
+          if (dx === 0 && dz === 0) continue;
+          this.walls.push(new Wall(this.scene, dx, dz, 'brick'));
+        }
+      }
+    } else {
+      // 高等级中央掩体减少
+      for (let dx = -wallSize; dx <= wallSize; dx += wallSize * 2) {
+        this.walls.push(new Wall(this.scene, dx, 0, 'steel'));
+      }
+    }
+  }
+
+  // ================================================================
+  //  关卡系统
+  // ================================================================
+
+  /** 当前关卡所需击杀数：L1=1, L2=2, ... L5=5, 之后封顶 5 */
+  killsForLevel() {
+    return Math.min(5, this.currentLevel);
+  }
+
+  /** 生成额外 AI 坦克（L21+双AI，L35+三AI） */
+  spawnExtraAIs() {
+    // 额外 AI 使用其他出生点
+    const extraSpawns = [
+      { x: -26, z: 26 }, { x: 26, z: -26 }
+    ];
+
+    if (this.currentLevel >= 35 && extraSpawns.length >= 2) {
+      const ai3 = new AITank(this.scene, extraSpawns[1].x, extraSpawns[1].z, 0x3b82f6, 2, '电脑C', this.currentLevel);
+      ai3.setAngleDeg(Math.random() * 360);
+      this.aiList.push(ai3);
+    }
+    if (this.currentLevel >= 21 && extraSpawns.length >= 1) {
+      const ai2 = new AITank(this.scene, extraSpawns[0].x, extraSpawns[0].z, 0x3b82f6, 2, '电脑B', this.currentLevel);
+      ai2.setAngleDeg(Math.random() * 360);
+      this.aiList.push(ai2);
+    }
+  }
+
+  /** 晋升下一关 */
+  nextLevel() {
+    this.currentLevel++;
+    // 重置玩家击杀但保留血量/位置
+    this.tank1.score = 0;
+    if (!this.tank1.alive) {
+      this.tank1.alive = true;
+      this.tank1.hp = this.tank1.maxHp;
+      this.tank1.group.visible = true;
+    }
+
+    // 销毁旧 AI
+    for (const ai of this.aiList) {
+      ai.destroy();
+    }
+    this.aiList = [];
+
+    // 创建新主 AI
+    this.tank2 = new AITank(this.scene, 26, 26, 0x3b82f6, 2, '电脑', this.currentLevel);
+    this.tank2.setAngleDeg(225);
+    this.aiList = [this.tank2];
+    this.spawnExtraAIs();
+
+    // 按等级重绘地图
+    this.createLevelMap(this.currentLevel);
+
+    // 清空残留子弹
+    this.bullets.forEach(b => b.destroy());
+    this.bullets = [];
+    this.explosions.forEach(e => e.dispose());
+    this.explosions = [];
+
+    this.gameState = 'playing';
+    this.audio.resume();
+  }
+
+  // ================================================================
+  //  游戏流程
+  // ================================================================
 
   start(mode) {
     this.gameMode = mode;
@@ -217,13 +357,22 @@ export class Game {
     this.tank1 = new Tank(this.scene, -26, -26, 0x22c55e, 1, '玩家1');
     this.tank1.setAngleDeg(45);
     if (mode === 'pve') {
-      this.tank2 = new AITank(this.scene, 26, 26, 0x3b82f6, 2, '电脑');
+      this.currentLevel = 1;
+      this.tank1.score = 0;
+      this.tank2 = new AITank(this.scene, 26, 26, 0x3b82f6, 2, '电脑', this.currentLevel);
+      this.aiList = [this.tank2];
+      this.spawnExtraAIs();
     } else {
       this.tank2 = new Tank(this.scene, 26, 26, 0xdc2626, 2, '玩家2');
+      this.aiList = [];
     }
     this.tank2.setAngleDeg(225);
 
-    this.createMap();
+    if (mode === 'pve') {
+      this.createLevelMap(this.currentLevel);
+    } else {
+      this.createMap();
+    }
     this.bullets = [];
     this.explosions = [];
     this.audio.resume();
@@ -232,6 +381,11 @@ export class Game {
   cleanup() {
     if (this.tank1) { this.tank1.destroy(); this.tank1 = null; }
     if (this.tank2) { this.tank2.destroy(); this.tank2 = null; }
+    // 清理额外 AI
+    for (const ai of this.aiList) {
+      if (ai !== this.tank2) ai.destroy();
+    }
+    this.aiList = [];
     this.walls.forEach(w => w.destroy());
     this.walls = [];
     this.bullets.forEach(b => b.destroy());
@@ -274,23 +428,34 @@ export class Game {
       }
     }
 
-    // AI控制
-    if (this.gameMode === 'pve' && this.tank2 instanceof AITank) {
-      this.tank2.think(this.tank1, this.walls, this.bullets, dt);
-      const b = this.tank2.aiUpdate(this.walls, this.tank1, now, dt);
-      if (b) {
-        this.bullets.push(b);
-        this.audio.playShoot();
+    // AI 控制（PvE，支持多 AI）
+    if (this.gameMode === 'pve') {
+      for (const ai of this.aiList) {
+        if (ai instanceof AITank) {
+          ai.think(this.tank1, this.walls, this.bullets, dt);
+          const b = ai.aiUpdate(this.walls, this.tank1, now, dt);
+          if (b) {
+            this.bullets.push(b);
+            this.audio.playShoot();
+          }
+        }
       }
     }
 
     // 复活
     this.tank1.respawn(this.spawnPoints, now);
     this.tank2.respawn(this.spawnPoints, now);
+    // 额外 AI 复活
+    for (const ai of this.aiList) {
+      if (ai !== this.tank2) ai.respawn(this.spawnPoints, now);
+    }
 
     // 更新坦克
     this.tank1.update(dt);
     this.tank2.update(dt);
+    for (const ai of this.aiList) {
+      if (ai !== this.tank2) ai.update(dt);
+    }
 
     // 更新子弹和碰撞
     this.updateBullets(dt);
@@ -299,12 +464,22 @@ export class Game {
     this.explosions.forEach(e => e.update(dt));
     this.explosions = this.explosions.filter(e => e.active);
 
-    // 获胜检查
-    if (this.tank1.score >= WIN_SCORE || this.tank2.score >= WIN_SCORE) {
-      this.gameState = 'gameover';
-      this.winner = this.tank1.score >= WIN_SCORE
-        ? { name: this.tank1.name, color: '#22c55e' }
-        : { name: this.tank2.name, color: this.gameMode === 'pve' ? '#3b82f6' : '#dc2626' };
+    // === 获胜/关卡检查 ===
+    if (this.gameMode === 'pve') {
+      const killsNeeded = this.killsForLevel();
+      if (this.tank1.score >= killsNeeded) {
+        this.gameState = 'levelComplete';
+      } else if (this.tank2.score >= killsNeeded) {
+        this.gameState = 'levelFailed';
+      }
+    } else {
+      // PvP 传统模式
+      if (this.tank1.score >= WIN_SCORE || this.tank2.score >= WIN_SCORE) {
+        this.gameState = 'gameover';
+        this.winner = this.tank1.score >= WIN_SCORE
+          ? { name: this.tank1.name, color: '#22c55e' }
+          : { name: this.tank2.name, color: '#dc2626' };
+      }
     }
 
     if (this.gameState === 'gameover' && !this.winSoundPlayed) {
@@ -356,18 +531,22 @@ export class Game {
       }
       if (!bullet.active) continue;
 
-      // 子弹 vs tank2
-      if (bullet.owner !== this.tank2.playerId && this.tank2.alive) {
-        if (aabbIntersect(bBox, this.tank2.getHitBox())) {
-          const pos = bullet.getPosition().clone();
-          bullet.destroy();
-          this.explosions.push(new Explosion(this.scene, pos, 'small'));
-          this.audio.playHit();
-          const killed = this.tank2.takeDamage(20);
-          if (killed) {
-            this.explosions.push(new Explosion(this.scene, this.tank2.getPosition().clone().add(new THREE.Vector3(0, 1, 0)), 'big'));
-            this.audio.playExplosion();
-            this.tank1.score++;
+      // 子弹 vs 所有 AI 坦克（PvE 多 AI）
+      const allAIs = this.gameMode === 'pve' ? this.aiList : [this.tank2];
+      for (const ai of allAIs) {
+        if (bullet.owner !== ai.playerId && ai.alive) {
+          if (aabbIntersect(bBox, ai.getHitBox())) {
+            const pos = bullet.getPosition().clone();
+            bullet.destroy();
+            this.explosions.push(new Explosion(this.scene, pos, 'small'));
+            this.audio.playHit();
+            const killed = ai.takeDamage(20);
+            if (killed) {
+              this.explosions.push(new Explosion(this.scene, ai.getPosition().clone().add(new THREE.Vector3(0, 1, 0)), 'big'));
+              this.audio.playExplosion();
+              this.tank1.score++;
+            }
+            break;
           }
         }
       }
@@ -382,7 +561,6 @@ export class Game {
     const h = window.innerHeight;
 
     if (this.cameraMode === 'split' && this.gameMode === 'pvp' && this.tank1 && this.tank2 && this.tank1.alive && this.tank2.alive) {
-      // ===== 分屏模式（上下分割，第一人称） =====
       const halfH = Math.floor(h / 2);
 
       // 上半：玩家2 第一人称（翻转180°，供对面P2观看）
@@ -390,7 +568,6 @@ export class Game {
       this.renderer.setScissor(0, 0, w, halfH);
       this.renderer.setScissorTest(true);
       this.updateFPVCamera(this.tank2, this.fpvCamera, w, halfH);
-      // 绕视线方向旋转180°，使对面P2看到正立画面
       this.fpvCamera.rotateZ(Math.PI);
       this.renderer.render(this.scene, this.fpvCamera);
 
@@ -402,18 +579,15 @@ export class Game {
       this.renderer.render(this.scene, this.camera);
       this.drawMinimap();
 
-      // 重置
       this.renderer.setViewport(0, 0, w, h);
       this.renderer.setScissorTest(false);
     } else if (this.cameraMode === 'fpv' && this.tank1 && this.tank1.alive) {
-      // ===== 第一人称 =====
       this.renderer.setViewport(0, 0, w, h);
       this.renderer.setScissorTest(false);
       this.updateFPVCamera(this.tank1, this.camera, w, h);
       this.renderer.render(this.scene, this.camera);
       this.drawMinimap();
     } else {
-      // ===== 默认/俯视视角 =====
       this.renderer.setViewport(0, 0, w, h);
       this.renderer.setScissorTest(false);
       if (this.controls) this.controls.update();
@@ -421,23 +595,20 @@ export class Game {
     }
   }
 
-  /** 更新FPV相机位置 */
   updateFPVCamera(tank, camera, viewW, viewH) {
     camera.aspect = viewW / viewH;
     camera.updateProjectionMatrix();
 
     const pos = tank.getPosition();
     const angle = tank.getRotation();
-    const height = 2.2; // 炮塔上方
+    const height = 2.2;
 
-    // 相机放在炮塔上方，略微靠前
     camera.position.set(
       pos.x + Math.sin(angle) * 0.8,
       height,
       pos.z + Math.cos(angle) * 0.8
     );
 
-    // 看向坦克前方20单位
     camera.lookAt(
       pos.x + Math.sin(angle) * 20,
       1.0,
@@ -445,27 +616,23 @@ export class Game {
     );
   }
 
-  /** 切换场景主题 */
   cycleTheme() {
     this.sceneThemeIndex = (this.sceneThemeIndex + 1) % THEMES.length;
     this.applyTheme(this.sceneThemeIndex);
     return THEMES[this.sceneThemeIndex].name;
   }
 
-  /** 应用场景主题 */
   applyTheme(index) {
     const t = THEMES[index];
     if (!t) return;
 
     this.sceneThemeName = t.name;
 
-    // 场景背景 & 雾
     this.scene.background.setHex(t.bg);
     this.scene.fog.color.setHex(t.fog);
     this.scene.fog.near = t.fogNear;
     this.scene.fog.far = t.fogFar;
 
-    // 灯光
     this.lightRefs.ambient.color.setHex(t.ambient);
     this.lightRefs.ambient.intensity = t.ambientInt;
     this.lightRefs.hemi.color.setHex(t.hemiSky);
@@ -476,19 +643,15 @@ export class Game {
     this.lightRefs.fill.color.setHex(t.fillCol);
     this.lightRefs.fill.intensity = t.fillInt;
 
-    // 地面
     if (this.groundMat) this.groundMat.color.setHex(t.ground);
   }
 
-  /** 竖屏时自动拉远相机，确保看到完整地图 */
   getPortraitScale() {
     const aspect = window.innerWidth / window.innerHeight;
     if (aspect >= 1) return 1;
-    // 竖屏比例越窄，缩放越大
     return Math.min(2.0, Math.max(1.3, 0.85 / aspect));
   }
 
-  /** 切换相机视角 */
   setCameraPreset(preset) {
     const w = window.innerWidth;
     const h = window.innerHeight;
@@ -508,7 +671,6 @@ export class Game {
       return;
     }
 
-    // 俯瞰预设视角
     document.body.classList.remove('fpv-mode');
     this.cameraMode = 'default';
     this.camera.aspect = w / h;
@@ -522,7 +684,6 @@ export class Game {
     const p = presets[preset] || presets[2];
     this.currentPreset = preset;
 
-    // 竖屏时拉远相机以显示更宽的地图范围
     const scale = this.getPortraitScale();
     let camX, camY, camZ;
     if (scale > 1) {
@@ -531,7 +692,6 @@ export class Game {
       [camX, camY, camZ] = p.pos;
     }
     this.camera.position.set(camX, camY, camZ);
-    // 同步 OrbitControls
     if (this.controls) {
       this.controls.target.set(...p.target);
       this.controls.enabled = true;
@@ -548,13 +708,11 @@ export class Game {
     this.fpvCamera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
 
-    // 横竖屏切换时重新应用当前预设以适配缩放
     if (this.cameraMode === 'default' && this.currentPreset) {
       this.setCameraPreset(this.currentPreset);
     }
   }
 
-  /** 绘制微缩地图（第一人称视角） */
   drawMinimap() {
     const canvas = document.getElementById('minimap');
     if (!canvas) return;
@@ -570,17 +728,13 @@ export class Game {
 
     ctx.clearRect(0, 0, size, size);
 
-    // 背景（80%透明）
     ctx.fillStyle = 'rgba(10, 10, 20, 0.2)';
     ctx.fillRect(0, 0, size, size);
 
-    // 地图边界
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
     ctx.lineWidth = 1;
     ctx.strokeRect(1, 1, size - 2, size - 2);
 
-    // 网格线（去掉，小尺寸下太密）
-    // 墙壁
     ctx.fillStyle = 'rgba(200, 200, 200, 0.12)';
     for (const wall of this.walls) {
       if (!wall.active) continue;
@@ -588,13 +742,11 @@ export class Game {
       ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
     }
 
-    // 绘制坦克标记
     const drawTank = (tank, color) => {
       if (!tank || !tank.alive) return;
       const p = toCanvas(tank.getPosition().x, tank.getPosition().z);
       const angle = tank.getRotation();
 
-      // 方向线
       ctx.strokeStyle = color;
       ctx.lineWidth = 1.2;
       ctx.globalAlpha = 0.5;
@@ -603,14 +755,12 @@ export class Game {
       ctx.lineTo(p.x - Math.sin(angle) * 5, p.y - Math.cos(angle) * 5);
       ctx.stroke();
 
-      // 圆点
       ctx.globalAlpha = 0.7;
       ctx.fillStyle = color;
       ctx.beginPath();
       ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
       ctx.fill();
 
-      // 白边
       ctx.strokeStyle = '#fff';
       ctx.lineWidth = 1;
       ctx.globalAlpha = 0.5;
@@ -619,7 +769,13 @@ export class Game {
     };
 
     if (this.tank1) drawTank(this.tank1, '#22c55e');
-    if (this.tank2) drawTank(this.tank2, this.gameMode === 'pve' ? '#3b82f6' : '#dc2626');
+    // 绘制所有 AI
+    for (const ai of this.aiList) {
+      drawTank(ai, '#3b82f6');
+    }
+    if (this.gameMode !== 'pve' && this.tank2) {
+      drawTank(this.tank2, '#dc2626');
+    }
   }
 
 }

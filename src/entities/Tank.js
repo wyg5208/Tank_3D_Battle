@@ -17,6 +17,8 @@ export class Tank {
     this.maxHp = MAX_HP;
     this.alive = true;
     this.score = 0;
+    this.speed = TANK_SPEED;
+    this.shootCooldown = SHOOT_COOLDOWN;
     this.lastShot = -SHOOT_COOLDOWN;
     this.respawnTimer = 0;
     this.respawnDelay = 2.0;
@@ -104,7 +106,7 @@ export class Tank {
   move(forward, walls, otherTank, dt) {
     if (!this.alive) return;
     const dir = forward ? 1 : -1;
-    const speed = TANK_SPEED * dir * dt;
+    const speed = (this.speed || TANK_SPEED) * dir * dt;
     const oldX = this.group.position.x;
     const oldZ = this.group.position.z;
 
@@ -139,7 +141,7 @@ export class Tank {
 
   shoot(now) {
     if (!this.alive) return null;
-    if (now - this.lastShot < SHOOT_COOLDOWN) return null;
+    if (now - this.lastShot < (this.shootCooldown || SHOOT_COOLDOWN)) return null;
     this.lastShot = now;
     const p = this.group.position;
     // 炮口方向与坦克一致

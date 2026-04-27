@@ -385,19 +385,21 @@ export class Game {
       // ===== 分屏模式（上下分割，第一人称） =====
       const halfH = Math.floor(h / 2);
 
-      // 上半：玩家1 第一人称
+      // 上半：玩家2 第一人称（翻转180°，供对面P2观看）
       this.renderer.setViewport(0, 0, w, halfH);
       this.renderer.setScissor(0, 0, w, halfH);
       this.renderer.setScissorTest(true);
-      this.updateFPVCamera(this.tank1, this.camera, w, halfH);
-      this.renderer.render(this.scene, this.camera);
+      this.updateFPVCamera(this.tank2, this.fpvCamera, w, halfH);
+      // 绕视线方向旋转180°，使对面P2看到正立画面
+      this.fpvCamera.rotateZ(Math.PI);
+      this.renderer.render(this.scene, this.fpvCamera);
 
-      // 下半：玩家2 第一人称（180°反转视角）
+      // 下半：玩家1 第一人称
       this.renderer.setViewport(0, halfH, w, h - halfH);
       this.renderer.setScissor(0, halfH, w, h - halfH);
       this.renderer.setScissorTest(true);
-      this.updateFPVCamera(this.tank2, this.fpvCamera, w, h - halfH);
-      this.renderer.render(this.scene, this.fpvCamera);
+      this.updateFPVCamera(this.tank1, this.camera, w, h - halfH);
+      this.renderer.render(this.scene, this.camera);
       this.drawMinimap();
 
       // 重置

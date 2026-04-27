@@ -12,6 +12,8 @@ export class TouchControls {
     // P2 摇杆状态
     this.p2JoystickCenter = { x: 0, y: 0 };
     this.p2ActiveId = null;
+    // P2 摇杆方向是否翻转（P2视图180°时摇杆上下左右对调）
+    this.p2FlipDirection = false;
 
     this.createUI();
     this.updateForMode();
@@ -40,12 +42,14 @@ export class TouchControls {
     if (cameraMode === 'fpv') {
       p2Controls.classList.remove('p2-flipped');
       p2Controls.classList.add('p2-hidden');
+      this.p2FlipDirection = false;
       return;
     }
 
-    // 非FPV 模式：显示 P2 并翻转180°
+    // 非FPV 模式：显示 P2 并翻转180°（位置翻转+方向对调）
     p2Controls.classList.remove('p2-hidden');
     p2Controls.classList.add('p2-flipped');
+    this.p2FlipDirection = true;
   }
 
   createUI() {
@@ -137,14 +141,19 @@ export class TouchControls {
       }
     );
 
-    // P2 摇杆 → 方向键
+    // P2 摇杆 → 方向键（翻转时上下左右对调）
     this.bindJoystick(this.p2JoyArea, this.p2JoyKnob,
       (id) => { this.p2ActiveId = id; },
       (id) => { return this.p2ActiveId === id ? { x: this.p2JoystickCenter.x, y: this.p2JoystickCenter.y } : null; },
       (cx, cy) => {
         const c = this.p2JoystickCenter;
         this.updateJoystickKnob(this.p2JoyKnob, cx, cy, c.x, c.y);
-        this.mapKeys(cx, cy, c.x, c.y, 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight');
+        // 视图翻转时，P2 推“上”在画面中是“下”，需反转方向键
+        if (this.p2FlipDirection) {
+          this.mapKeys(cx, cy, c.x, c.y, 'ArrowDown', 'ArrowUp', 'ArrowRight', 'ArrowLeft');
+        } else {
+          this.mapKeys(cx, cy, c.x, c.y, 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight');
+        }
       },
       () => {
         this.p2JoyKnob.style.transform = 'translate(-50%, -50%)';
@@ -204,7 +213,7 @@ export class TouchControls {
     const dx = cx - centerX;
     const dy = cy - centerY;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    const maxDist = 45;
+    const maxDist = 35;
     const clamped = Math.min(dist, maxDist);
     const angle = Math.atan2(dy, dx);
     const kx = Math.cos(angle) * clamped;

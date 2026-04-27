@@ -318,8 +318,8 @@ body.touch-device #touch-controls {
 /* ===== 摇杆区（通用） ===== */
 .touch-joystick-area {
   position: fixed;
-  width: 130px;
-  height: 130px;
+  width: 100px;
+  height: 100px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.08);
   border: 2px solid rgba(255, 255, 255, 0.25);
@@ -330,8 +330,8 @@ body.touch-device #touch-controls {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 50px;
-  height: 50px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.35);
   border: 2px solid rgba(255, 255, 255, 0.7);
@@ -340,23 +340,23 @@ body.touch-device #touch-controls {
   transition: none;
 }
 
-/* P1 摇杆 - 屏幕左下 */
+/* P1 摇杆 - 屏幕左下（贴近底边） */
 #p1-joystick-area {
-  bottom: 120px;
-  left: 16px;
+  bottom: 30px;
+  left: 10px;
 }
 
-/* P2 摇杆 - 屏幕左上 */
+/* P2 摇杆 - 屏幕左上（贴近顶边） */
 #p2-joystick-area {
-  top: 120px;
-  left: 16px;
+  top: 30px;
+  left: 10px;
 }
 
 /* ===== 射击按钮（通用） ===== */
 .touch-fire-btn {
   position: fixed;
-  width: 75px;
-  height: 75px;
+  width: 58px;
+  height: 58px;
   border-radius: 50%;
   background: rgba(255, 68, 68, 0.22);
   border: 3px solid rgba(255, 255, 255, 0.55);
@@ -368,32 +368,34 @@ body.touch-device #touch-controls {
   -webkit-tap-highlight-color: transparent;
 }
 .touch-fire-btn svg {
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   pointer-events: none;
 }
 
-/* P1 射击 - 屏幕右下 */
+/* P1 射击 - 屏幕右下（贴近底边） */
 #p1-fire-btn {
-  bottom: 130px;
-  right: 24px;
+  bottom: 36px;
+  right: 14px;
 }
 
-/* P2 射击 - 屏幕右上 */
+/* P2 射击 - 屏幕右上（贴近顶边） */
 #p2-fire-btn {
-  top: 130px;
-  right: 24px;
+  top: 36px;
+  right: 14px;
 }
 
 /* ===== P2 控件翻转180°（1/2/3/5号视角） ===== */
 /* 摇杆从左上 → 右上，射击从右上 → 左上 */
+/* P2 翻转时摇杆也调整边距 */
 #touch-p2.p2-flipped #p2-joystick-area {
   left: auto;
-  right: 16px;
+  right: 10px;
 }
+/* P2 翻转时射击按钮也调整边距 */
 #touch-p2.p2-flipped #p2-fire-btn {
   right: auto;
-  left: 24px;
+  left: 14px;
 }
 
 /* ===== FPV 模式隐藏 P2 控件（4号视角） ===== */
